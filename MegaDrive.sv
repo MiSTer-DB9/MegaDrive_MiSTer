@@ -166,8 +166,8 @@ module emu
 	// 1 - D-/TX
 	// 2..6 - USR2..USR6
 	// Set USER_OUT to 1 to read from USER_IN.
-	input   [6:0] USER_IN,
-	output  [6:0] USER_OUT,
+	input   [7:0] USER_IN,
+	output  [7:0] USER_OUT,
 
 	input         OSD_STATUS
 );
@@ -1127,20 +1127,20 @@ lightgun lightgun
 wire [6:0] SNAC_IN;
 wire [6:0] SNAC_OUT;
 always_comb begin
-	SNAC_IN[0]  = USER_IN[1]; //up
-	SNAC_IN[1]  = USER_IN[0]; //down
-	SNAC_IN[2]  = USER_IN[5]; //left
-	SNAC_IN[3]  = USER_IN[3]; //right
-	SNAC_IN[4]  = USER_IN[2]; //b TL
+	SNAC_IN[0]  = USER_IN[5]; //up
+	SNAC_IN[1]  = USER_IN[7]; //down
+	SNAC_IN[2]  = USER_IN[1]; //left
+	SNAC_IN[3]  = USER_IN[2]; //right
+	SNAC_IN[4]  = USER_IN[3]; //b TL
 	SNAC_IN[5]  = USER_IN[6]; //c TR GPIO7
-	SNAC_IN[6]  = USER_IN[4]; //  TH
-	USER_OUT[1] = SNAC_OUT[0];
-	USER_OUT[0] = SNAC_OUT[1];
-	USER_OUT[5] = SNAC_OUT[2];
-	USER_OUT[3] = SNAC_OUT[3];
-	USER_OUT[2] = SNAC_OUT[4];
+	SNAC_IN[6]  = USER_IN[0]; //  TH
+	USER_OUT[5] = SNAC_OUT[0];
+	USER_OUT[7] = SNAC_OUT[1];
+	USER_OUT[1] = SNAC_OUT[2];
+	USER_OUT[2] = SNAC_OUT[3];
+	USER_OUT[3] = SNAC_OUT[4];
 	USER_OUT[6] = SNAC_OUT[5];
-	USER_OUT[4] = SNAC_OUT[6];
+	USER_OUT[0] = SNAC_OUT[6];
 end
 
 wire snac_port1 = (status[63:62] == 1);
