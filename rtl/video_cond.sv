@@ -73,7 +73,6 @@ always @(posedge clk) hs_d <= hs_in;
 wire hs_begin = hs_d & ~hs_in;
 wire hs_end   = ~hs_d & hs_in;
 
-
 reg        hs_clean;
 reg [12:0] hcnt;
 always @(posedge clk) begin
@@ -152,24 +151,24 @@ wire hbl = ~(border_en ? hde_brd : vdp_de_h);
 
 video_cleaner cleaner
 (
-	.clk_vid(clk),
-	.ce_pix(ce_pix),
+       .clk_vid(clk),
+       .ce_pix(ce_pix),
 
-	.R(r_in),
-	.G(g_in),
-	.B(b_in),
-	.HSync(hs_clean),
-	.VSync(vs_in),
-	.HBlank(hbl),
-	.VBlank(vbl),
+       .R(r_in),
+       .G(g_in),
+       .B(b_in),
+       .HSync(hs_clean),
+       .VSync(vs_in),
+       .HBlank(hbl),
+       .VBlank(vbl),
 
-	.VGA_R(r_c),
-	.VGA_G(g_c),
-	.VGA_B(b_c),
-	.VGA_VS(vs_c),
-	.VGA_HS(hs_c),
-	.HBlank_out(hblank_c),
-	.VBlank_out(vblank_c)
+       .VGA_R(r_c),
+       .VGA_G(g_c),
+       .VGA_B(b_c),
+       .VGA_VS(vs_c),
+       .VGA_HS(hs_c),
+       .HBlank_out(hblank_c),
+       .VBlank_out(vblank_c)
 );
 
 wire [7:0] r_c, g_c, b_c;
@@ -184,7 +183,7 @@ cofi coffee
 	.hblank(hblank_c),
 	.vblank(vblank_c),
 	.hs(hs_c),
-	.vs(vs_c),
+	.vs(vs_in), // original vsync used to avoid breaking interlaced video
 	.red(r_c),
 	.green(g_c),
 	.blue(b_c),
