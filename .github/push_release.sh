@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-CORE_NAME="Megadrive"
+CORE_NAME="MegaDrive"
 MAIN_BRANCH="main"
 COMPILATION_OUTPUT="output_files/MegaDrive.rbf"
 
