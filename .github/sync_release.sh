@@ -4,7 +4,7 @@
 set -euo pipefail
 
 UPSTREAM_REPO="https://github.com/MiSTer-devel/MegaDrive_MiSTer"
-CORE_NAME="Megadrive"
+CORE_NAME="MegaDrive"
 MAIN_BRANCH="main"
 
 echo "Fetching upstream:"
