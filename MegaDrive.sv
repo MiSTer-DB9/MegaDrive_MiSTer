@@ -1215,22 +1215,29 @@ lightgun lightgun
 
 wire [6:0] SNAC_IN;
 wire [6:0] SNAC_OUT;
+// [MiSTer-DB9 BEGIN] - SNAC pin map: fork DB9 adapter (matches joydb9md USER_IO wiring)
 always_comb begin
-	SNAC_IN[0]  = USER_IN[1]; //up
-	SNAC_IN[1]  = USER_IN[0]; //down
-	SNAC_IN[2]  = USER_IN[5]; //left
-	SNAC_IN[3]  = USER_IN[3]; //right
-	SNAC_IN[4]  = USER_IN[2]; //b TL
-	SNAC_IN[5]  = USER_IN[6]; //c TR GPIO7
-	SNAC_IN[6]  = USER_IN[4]; //  TH
-	USER_OUT[1] = SNAC_OUT[0];
-	USER_OUT[0] = SNAC_OUT[1];
-	USER_OUT[5] = SNAC_OUT[2];
-	USER_OUT[3] = SNAC_OUT[3];
-	USER_OUT[2] = SNAC_OUT[4];
-	USER_OUT[6] = SNAC_OUT[5];
-	USER_OUT[4] = SNAC_OUT[6];
+	SNAC_IN[0]  = USER_IN[5]; //up
+	SNAC_IN[1]  = USER_IN[7]; //down
+	SNAC_IN[2]  = USER_IN[1]; //left
+	SNAC_IN[3]  = USER_IN[2]; //right
+	SNAC_IN[4]  = USER_IN[3]; //b TL
+	SNAC_IN[5]  = USER_IN[6]; //c TR
+	SNAC_IN[6]  = USER_IN[0]; //TH
+
+	USER_OUT    = USER_OUT_DRIVE; // joydb baseline (covers SNAC=Off + bit 7)
+	if (snac_active) begin
+		USER_OUT[5] = SNAC_OUT[0]; //up
+		USER_OUT[7] = SNAC_OUT[1]; //down (fork DB9 8th pin)
+		USER_OUT[1] = SNAC_OUT[2]; //left
+		USER_OUT[2] = SNAC_OUT[3]; //right
+		USER_OUT[3] = SNAC_OUT[4]; //b TL
+		USER_OUT[6] = SNAC_OUT[5]; //c TR
+		USER_OUT[0] = SNAC_OUT[6]; //TH
+		USER_OUT[4] = 1'b1;        //idle (unused by MD pad — fork DB9 routes JOY_SPLIT here)
+	end
 end
+// [MiSTer-DB9 END]
 
 wire snac_port1 = (status[63:62] == 1);
 assign PA_i = snac_port1 ? SNAC_IN : md_io_port1;
@@ -1241,18 +1248,10 @@ assign PB_i = snac_port2 ? SNAC_IN : md_io_port2;
 wire snac_port3 = (status[63:62] == 3);
 assign PC_i = snac_port3 ? SNAC_IN : (PC_d | PC_o);
 
-// [MiSTer-DB9 BEGIN] - 8-bit USER_OUT extension: route bit 7 through joydb
-assign USER_OUT[7] = USER_OUT_DRIVE[7];
-// [MiSTer-DB9 END]
-
-// [MiSTer-DB9 BEGIN] - SNAC default permutes USER_OUT_DRIVE so joydb still wins when SNAC=Off
 assign SNAC_OUT = snac_port1 ? (PA_d | PA_o) :
                   snac_port2 ? (PB_d | PB_o) :
                   snac_port3 ? (PC_d | PC_o) :
-                  {USER_OUT_DRIVE[4], USER_OUT_DRIVE[6], USER_OUT_DRIVE[2],
-                   USER_OUT_DRIVE[3], USER_OUT_DRIVE[5], USER_OUT_DRIVE[0],
-                   USER_OUT_DRIVE[1]};
-// [MiSTer-DB9 END]
+                  7'h7F;
 
 /////////////////////////  BRAM SAVE/LOAD  /////////////////////////////
 
