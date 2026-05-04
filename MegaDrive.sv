@@ -184,9 +184,11 @@ assign USER_PP = USER_PP_DRIVE;
 // [MiSTer-DB9 END]
 assign ADC_BUS  = 'Z;
 
-// [MiSTer-DB9 BEGIN] - DB9/SNAC8 support: joydb wrapper
+// [MiSTer-DB9 BEGIN] - DB9/SNAC8 support: joydb wrapper + SNAC priority gate
 wire         CLK_JOY = CLK_50M;                 // Assign clock between 40-50Mhz
-wire   [1:0] joy_type        = status[127:126]; // 0=Off, 1=Saturn, 2=DB9MD, 3=DB15
+wire   [1:0] joy_type_raw    = status[127:126]; // 0=Off, 1=Saturn, 2=DB9MD, 3=DB15
+wire         snac_active     = |status[63:62];  // SNAC preempts joydb on shared USER_IO
+wire   [1:0] joy_type        = snac_active ? 2'd0 : joy_type_raw;
 wire         joy_2p          = status[125];
 // [MiSTer-DB9 END]
 
@@ -216,8 +218,6 @@ joydb joydb (
   .joydb_2ena      ( joydb_2ena      ),
   .joy_raw         ( joy_raw_payload )
 );
-
-assign USER_OUT = USER_OUT_DRIVE;
 // [MiSTer-DB9 END]
 
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
@@ -314,6 +314,8 @@ localparam CONF_STR = {
 	"P2O[41:40],Gun Control,Disabled,Joy1,Joy2,Mouse;",
 	"D4P2O[42],Gun Fire,Joy,Mouse;",
 	"D4P2O[44:43],Cross,Small,Medium,Big,None;",
+	"P2-;",
+	"P2O[63:62],SNAC,Off,Port 1,Port 2,Port 3;",
 
 	"-;",
 	"O[61],Pause When OSD is Open,No,Yes;",
@@ -1165,12 +1167,12 @@ md_io md_io
 	.jcart_th(jcart_th),
 
 	.port1_out(md_io_port1),
-	.port1_in(PA_o),
-	.port1_dir(PA_d),
+	.port1_in(PA_o  | {7{snac_port1}}),
+	.port1_dir(PA_d | {7{snac_port1}}),
 
 	.port2_out(md_io_port2),
-	.port2_in(PB_o),
-	.port2_dir(PB_d)
+	.port2_in(PB_o  | {7{snac_port2}}),
+	.port2_dir(PB_d | {7{snac_port2}})
 );
 
 wire [2:0] lg_target;
@@ -1211,9 +1213,46 @@ lightgun lightgun
 	.BTN_START(lg_start)
 );
 
-assign PA_i = md_io_port1;
-assign PB_i = md_io_port2;
-assign PC_i = (PC_d | PC_o);
+wire [6:0] SNAC_IN;
+wire [6:0] SNAC_OUT;
+always_comb begin
+	SNAC_IN[0]  = USER_IN[1]; //up
+	SNAC_IN[1]  = USER_IN[0]; //down
+	SNAC_IN[2]  = USER_IN[5]; //left
+	SNAC_IN[3]  = USER_IN[3]; //right
+	SNAC_IN[4]  = USER_IN[2]; //b TL
+	SNAC_IN[5]  = USER_IN[6]; //c TR GPIO7
+	SNAC_IN[6]  = USER_IN[4]; //  TH
+	USER_OUT[1] = SNAC_OUT[0];
+	USER_OUT[0] = SNAC_OUT[1];
+	USER_OUT[5] = SNAC_OUT[2];
+	USER_OUT[3] = SNAC_OUT[3];
+	USER_OUT[2] = SNAC_OUT[4];
+	USER_OUT[6] = SNAC_OUT[5];
+	USER_OUT[4] = SNAC_OUT[6];
+end
+
+wire snac_port1 = (status[63:62] == 1);
+assign PA_i = snac_port1 ? SNAC_IN : md_io_port1;
+
+wire snac_port2 = (status[63:62] == 2);
+assign PB_i = snac_port2 ? SNAC_IN : md_io_port2;
+
+wire snac_port3 = (status[63:62] == 3);
+assign PC_i = snac_port3 ? SNAC_IN : (PC_d | PC_o);
+
+// [MiSTer-DB9 BEGIN] - 8-bit USER_OUT extension: route bit 7 through joydb
+assign USER_OUT[7] = USER_OUT_DRIVE[7];
+// [MiSTer-DB9 END]
+
+// [MiSTer-DB9 BEGIN] - SNAC default permutes USER_OUT_DRIVE so joydb still wins when SNAC=Off
+assign SNAC_OUT = snac_port1 ? (PA_d | PA_o) :
+                  snac_port2 ? (PB_d | PB_o) :
+                  snac_port3 ? (PC_d | PC_o) :
+                  {USER_OUT_DRIVE[4], USER_OUT_DRIVE[6], USER_OUT_DRIVE[2],
+                   USER_OUT_DRIVE[3], USER_OUT_DRIVE[5], USER_OUT_DRIVE[0],
+                   USER_OUT_DRIVE[1]};
+// [MiSTer-DB9 END]
 
 /////////////////////////  BRAM SAVE/LOAD  /////////////////////////////
 
