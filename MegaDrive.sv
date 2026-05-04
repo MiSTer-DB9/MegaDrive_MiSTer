@@ -179,8 +179,8 @@ module emu
 );
 
 
-// [MiSTer-DB9 BEGIN] - DB9/SNAC8 support: USER_PP default (port_batch replaces with USER_PP_DRIVE)
-assign USER_PP = USER_PP_DRIVE;
+// [MiSTer-DB9 BEGIN] - DB9/SNAC8 support: USER_PP default (SNAC drives TH + splitter SEL push-pull)
+assign USER_PP = snac_active ? 8'b00010001 : USER_PP_DRIVE;
 // [MiSTer-DB9 END]
 assign ADC_BUS  = 'Z;
 
@@ -190,6 +190,10 @@ wire   [1:0] joy_type_raw    = status[127:126]; // 0=Off, 1=Saturn, 2=DB9MD, 3=D
 wire         snac_active     = |status[63:62];  // SNAC preempts joydb on shared USER_IO
 wire   [1:0] joy_type        = snac_active ? 2'd0 : joy_type_raw;
 wire         joy_2p          = status[125];
+wire         snac_p1         = (status[63:62] == 2'd1);
+wire         snac_p2         = (status[63:62] == 2'd2);
+wire         snac_p3         = (status[63:62] == 2'd3);
+wire         snac_2p         = (snac_p1 | snac_p2) & joy_2p;
 // [MiSTer-DB9 END]
 
 // [MiSTer-DB9-Pro BEGIN] - Saturn key gate
@@ -1167,12 +1171,12 @@ md_io md_io
 	.jcart_th(jcart_th),
 
 	.port1_out(md_io_port1),
-	.port1_in(PA_o  | {7{snac_port1}}),
-	.port1_dir(PA_d | {7{snac_port1}}),
+	.port1_in(PA_o  | {7{snac_p1 | snac_2p}}),
+	.port1_dir(PA_d | {7{snac_p1 | snac_2p}}),
 
 	.port2_out(md_io_port2),
-	.port2_in(PB_o  | {7{snac_port2}}),
-	.port2_dir(PB_d | {7{snac_port2}})
+	.port2_in(PB_o  | {7{snac_p2 | snac_2p}}),
+	.port2_dir(PB_d | {7{snac_p2 | snac_2p}})
 );
 
 wire [2:0] lg_target;
@@ -1234,24 +1238,49 @@ always_comb begin
 		USER_OUT[3] = SNAC_OUT[4]; //b TL
 		USER_OUT[6] = SNAC_OUT[5]; //c TR
 		USER_OUT[0] = SNAC_OUT[6]; //TH
-		USER_OUT[4] = 1'b1;        //idle (unused by MD pad — fork DB9 routes JOY_SPLIT here)
+		USER_OUT[4] = snac_2p ? snac_split : 1'b0; //2P splitter SEL; 1P selects physical P1
 	end
 end
-// [MiSTer-DB9 END]
 
-wire snac_port1 = (status[63:62] == 1);
-assign PA_i = snac_port1 ? SNAC_IN : md_io_port1;
+// 2P split-select tracker: follow whichever MD port most recently changed its
+// TH/output drive. Drives the fork DB9 adapter's 74HC157 SEL on USER_IO[4]
+// and steers per-port read latches. Mirrors Saturn.sv snac_split pattern,
+// substituting PA_d|PA_o / PB_d|PB_o for SMPC_PDR1O / SMPC_PDR2O.
+wire [6:0] PA_drv = PA_d | PA_o;
+wire [6:0] PB_drv = PB_d | PB_o;
+wire [6:0] PC_drv = PC_d | PC_o;
+reg  [6:0] last_PA_drv, last_PB_drv;
+reg        snac_split;
+always @(posedge clk_sys) begin
+	last_PA_drv <= PA_drv;
+	last_PB_drv <= PB_drv;
+	if (~snac_2p)                       snac_split <= 1'b0;
+	else if (PA_drv != last_PA_drv)     snac_split <= 1'b0;
+	else if (PB_drv != last_PB_drv)     snac_split <= 1'b1;
+end
 
-wire snac_port2 = (status[63:62] == 2);
-assign PB_i = snac_port2 ? SNAC_IN : md_io_port2;
+reg [6:0] USERJOYSTICK_P1, USERJOYSTICK_P2;
+always @(posedge clk_sys) begin
+	if (snac_2p) begin
+		if (~snac_split) USERJOYSTICK_P1 <= SNAC_IN;
+		else             USERJOYSTICK_P2 <= SNAC_IN;
+	end
+end
 
-wire snac_port3 = (status[63:62] == 3);
-assign PC_i = snac_port3 ? SNAC_IN : (PC_d | PC_o);
+assign PA_i = snac_2p ? USERJOYSTICK_P1
+            : snac_p1 ? SNAC_IN
+            : md_io_port1;
+assign PB_i = snac_2p ? USERJOYSTICK_P2
+            : snac_p2 ? SNAC_IN
+            : md_io_port2;
+assign PC_i = snac_p3 ? SNAC_IN : PC_drv;
 
-assign SNAC_OUT = snac_port1 ? (PA_d | PA_o) :
-                  snac_port2 ? (PB_d | PB_o) :
-                  snac_port3 ? (PC_d | PC_o) :
+assign SNAC_OUT = snac_2p ? (snac_split ? PB_drv : PA_drv) :
+                  snac_p1 ? PA_drv :
+                  snac_p2 ? PB_drv :
+                  snac_p3 ? PC_drv :
                   7'h7F;
+// [MiSTer-DB9 END]
 
 /////////////////////////  BRAM SAVE/LOAD  /////////////////////////////
 
