@@ -1239,7 +1239,7 @@ always_comb begin
 		USER_OUT[3] = SNAC_OUT[4]; //b TL
 		USER_OUT[6] = SNAC_OUT[5]; //c TR
 		USER_OUT[0] = SNAC_OUT[6]; //TH
-		USER_OUT[4] = snac_2p ? snac_split : 1'b0; //2P splitter SEL; 1P selects physical P1
+		USER_OUT[4] = snac_2p ? (snac_split ^ status[4]) : 1'b0; //2P splitter SEL; XOR status[4] (Swap Joysticks); 1P selects physical P1
 	end
 end
 
