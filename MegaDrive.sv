@@ -320,6 +320,7 @@ localparam CONF_STR = {
 	"D4P2O[44:43],Cross,Small,Medium,Big,None;",
 	"P2-;",
 	"P2O[63:62],SNAC,Off,Port 1,Port 2,Port 3;",
+	"P2O[125],SNAC Players, 1 Player,2 Players;",
 
 	"-;",
 	"O[61],Pause When OSD is Open,No,Yes;",
