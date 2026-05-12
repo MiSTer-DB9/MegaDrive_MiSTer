@@ -1243,26 +1243,38 @@ always_comb begin
 	end
 end
 
-// 2P split-select tracker: follow whichever MD port most recently changed its
-// TH/output drive. Drives the fork DB9 adapter's 74HC157 SEL on USER_IO[4]
-// and steers per-port read latches. Mirrors Saturn.sv snac_split pattern,
-// substituting PA_d|PA_o / PB_d|PB_o for SMPC_PDR1O / SMPC_PDR2O.
+// 2P SNAC split-select: decouples the 74HC157D mux SEL on USER_IO[4] (a free-
+// running alternator, mirrors joydb9md.v's joySplit cadence so both 6-button
+// pads stay refreshed in the per-port read latches) from the last-changed
+// tracker that drives SNAC_OUT when PA_drv and PB_drv disagree.
 wire [6:0] PA_drv = PA_d | PA_o;
 wire [6:0] PB_drv = PB_d | PB_o;
 wire [6:0] PC_drv = PC_d | PC_o;
+
+reg [7:0] snac_alt;
+always @(posedge clk_sys) snac_alt <= snac_alt + 1'd1;
+wire snac_alt_tog = (snac_alt[4:0] == 5'd31); // toggle every 32 cycles
+wire snac_alt_lat = (snac_alt[4:0] == 5'd15); // latch midway (~16-cycle settle)
+
+reg snac_split;
+always @(posedge clk_sys) begin
+	if (~snac_2p)          snac_split <= 1'b0;        // 1P: park mux on P1
+	else if (snac_alt_tog) snac_split <= ~snac_split; // 2P: continuous alternation
+end
+
 reg  [6:0] last_PA_drv, last_PB_drv;
-reg        snac_split;
+reg        last_changed_p2;
 always @(posedge clk_sys) begin
 	last_PA_drv <= PA_drv;
 	last_PB_drv <= PB_drv;
-	if (~snac_2p)                       snac_split <= 1'b0;
-	else if (PA_drv != last_PA_drv)     snac_split <= 1'b0;
-	else if (PB_drv != last_PB_drv)     snac_split <= 1'b1;
+	if (~snac_2p)                       last_changed_p2 <= 1'b0;
+	else if (PA_drv != last_PA_drv)     last_changed_p2 <= 1'b0;
+	else if (PB_drv != last_PB_drv)     last_changed_p2 <= 1'b1;
 end
 
 reg [6:0] USERJOYSTICK_P1, USERJOYSTICK_P2;
 always @(posedge clk_sys) begin
-	if (snac_2p) begin
+	if (snac_2p & snac_alt_lat) begin
 		if (~snac_split) USERJOYSTICK_P1 <= SNAC_IN;
 		else             USERJOYSTICK_P2 <= SNAC_IN;
 	end
@@ -1276,11 +1288,12 @@ assign PB_i = snac_2p ? USERJOYSTICK_P2
             : md_io_port2;
 assign PC_i = snac_p3 ? SNAC_IN : PC_drv;
 
-assign SNAC_OUT = snac_2p ? (snac_split ? PB_drv : PA_drv) :
-                  snac_p1 ? PA_drv :
-                  snac_p2 ? PB_drv :
-                  snac_p3 ? PC_drv :
-                  7'h7F;
+assign SNAC_OUT = snac_2p ? ((PA_drv == PB_drv) ? PA_drv
+                             : (last_changed_p2 ? PB_drv : PA_drv))
+                : snac_p1 ? PA_drv
+                : snac_p2 ? PB_drv
+                : snac_p3 ? PC_drv
+                : 7'h7F;
 // [MiSTer-DB9 END]
 
 /////////////////////////  BRAM SAVE/LOAD  /////////////////////////////
