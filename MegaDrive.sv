@@ -1243,18 +1243,18 @@ always_comb begin
 	end
 end
 
-// 2P SNAC split-select: decouples the 74HC157D mux SEL on USER_IO[4] (a free-
-// running alternator, mirrors joydb9md.v's joySplit cadence so both 6-button
-// pads stay refreshed in the per-port read latches) from the last-changed
-// tracker that drives SNAC_OUT when PA_drv and PB_drv disagree.
+// 2P SNAC split-select: decouples the 74HC157D mux SEL on USER_IO[4] from
+// the last-changed tracker that drives SNAC_OUT when PA_drv and PB_drv
+// disagree. The alternator mirrors joydb9md.v's cadence: 64 clk_sys cycles
+// per mux side, with the input latched halfway through the settled window.
 wire [6:0] PA_drv = PA_d | PA_o;
 wire [6:0] PB_drv = PB_d | PB_o;
 wire [6:0] PC_drv = PC_d | PC_o;
 
 reg [7:0] snac_alt;
 always @(posedge clk_sys) snac_alt <= snac_alt + 1'd1;
-wire snac_alt_tog = (snac_alt[4:0] == 5'd31); // toggle every 32 cycles
-wire snac_alt_lat = (snac_alt[4:0] == 5'd15); // latch midway (~16-cycle settle)
+wire snac_alt_tog = (snac_alt[5:0] == 6'd63); // toggle every 64 cycles
+wire snac_alt_lat = (snac_alt[5:0] == 6'd31); // latch midway (~32-cycle settle)
 
 reg snac_split;
 always @(posedge clk_sys) begin
