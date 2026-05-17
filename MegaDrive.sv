@@ -193,7 +193,6 @@ wire         joy_2p          = status[125];
 wire         snac_p1         = (status[63:62] == 2'd1);
 wire         snac_p2         = (status[63:62] == 2'd2);
 wire         snac_p3         = (status[63:62] == 2'd3);
-wire         snac_2p         = (snac_p1 | snac_p2) & joy_2p;
 // [MiSTer-DB9 END]
 
 // [MiSTer-DB9-Pro BEGIN] - Saturn key gate
@@ -320,7 +319,6 @@ localparam CONF_STR = {
 	"D4P2O[44:43],Cross,Small,Medium,Big,None;",
 	"P2-;",
 	"P2O[63:62],SNAC,Off,Port 1,Port 2,Port 3;",
-	"P2O[125],SNAC Players, 1 Player,2 Players;",
 
 	"-;",
 	"O[61],Pause When OSD is Open,No,Yes;",
@@ -1172,12 +1170,12 @@ md_io md_io
 	.jcart_th(jcart_th),
 
 	.port1_out(md_io_port1),
-	.port1_in(PA_o  | {7{snac_p1 | snac_2p}}),
-	.port1_dir(PA_d | {7{snac_p1 | snac_2p}}),
+	.port1_in(PA_o  | {7{snac_p1}}),
+	.port1_dir(PA_d | {7{snac_p1}}),
 
 	.port2_out(md_io_port2),
-	.port2_in(PB_o  | {7{snac_p2 | snac_2p}}),
-	.port2_dir(PB_d | {7{snac_p2 | snac_2p}})
+	.port2_in(PB_o  | {7{snac_p2}}),
+	.port2_dir(PB_d | {7{snac_p2}})
 );
 
 wire [2:0] lg_target;
@@ -1239,58 +1237,22 @@ always_comb begin
 		USER_OUT[3] = SNAC_OUT[4]; //b TL
 		USER_OUT[6] = SNAC_OUT[5]; //c TR
 		USER_OUT[0] = SNAC_OUT[6]; //TH
-		USER_OUT[4] = snac_2p ? (snac_split ^ status[4]) : 1'b0; //2P splitter SEL; XOR status[4] (Swap Joysticks); 1P selects physical P1
+		USER_OUT[4] = 1'b0; //1P selects physical P1
 	end
 end
 
-// 2P SNAC split-select: decouples the 74HC157D mux SEL on USER_IO[4] from
-// the last-changed tracker that drives SNAC_OUT when PA_drv and PB_drv
-// disagree. The alternator mirrors joydb9md.v's cadence: 64 clk_sys cycles
-// per mux side, with the input latched halfway through the settled window.
+// 1P SNAC: raw zero-latency pass-through. The selected physical port's
+// drive lines feed SNAC_OUT verbatim and SNAC_IN feeds that port's input.
+// (Driven = direction-bit OR output-bit; pad pull-up idles released pins high.)
 wire [6:0] PA_drv = PA_d | PA_o;
 wire [6:0] PB_drv = PB_d | PB_o;
 wire [6:0] PC_drv = PC_d | PC_o;
 
-reg [7:0] snac_alt;
-always @(posedge clk_sys) snac_alt <= snac_alt + 1'd1;
-wire snac_alt_tog = (snac_alt[5:0] == 6'd63); // toggle every 64 cycles
-wire snac_alt_lat = (snac_alt[5:0] == 6'd31); // latch midway (~32-cycle settle)
-
-reg snac_split;
-always @(posedge clk_sys) begin
-	if (~snac_2p)          snac_split <= 1'b0;        // 1P: park mux on P1
-	else if (snac_alt_tog) snac_split <= ~snac_split; // 2P: continuous alternation
-end
-
-reg  [6:0] last_PA_drv, last_PB_drv;
-reg        last_changed_p2;
-always @(posedge clk_sys) begin
-	last_PA_drv <= PA_drv;
-	last_PB_drv <= PB_drv;
-	if (~snac_2p)                       last_changed_p2 <= 1'b0;
-	else if (PA_drv != last_PA_drv)     last_changed_p2 <= 1'b0;
-	else if (PB_drv != last_PB_drv)     last_changed_p2 <= 1'b1;
-end
-
-reg [6:0] USERJOYSTICK_P1, USERJOYSTICK_P2;
-always @(posedge clk_sys) begin
-	if (snac_2p & snac_alt_lat) begin
-		if (~snac_split) USERJOYSTICK_P1 <= SNAC_IN;
-		else             USERJOYSTICK_P2 <= SNAC_IN;
-	end
-end
-
-assign PA_i = snac_2p ? USERJOYSTICK_P1
-            : snac_p1 ? SNAC_IN
-            : md_io_port1;
-assign PB_i = snac_2p ? USERJOYSTICK_P2
-            : snac_p2 ? SNAC_IN
-            : md_io_port2;
+assign PA_i = snac_p1 ? SNAC_IN : md_io_port1;
+assign PB_i = snac_p2 ? SNAC_IN : md_io_port2;
 assign PC_i = snac_p3 ? SNAC_IN : PC_drv;
 
-assign SNAC_OUT = snac_2p ? ((PA_drv == PB_drv) ? PA_drv
-                             : (last_changed_p2 ? PB_drv : PA_drv))
-                : snac_p1 ? PA_drv
+assign SNAC_OUT = snac_p1 ? PA_drv
                 : snac_p2 ? PB_drv
                 : snac_p3 ? PC_drv
                 : 7'h7F;
