@@ -188,6 +188,12 @@ assign ADC_BUS  = 'Z;
 wire         CLK_JOY = CLK_50M;                 // Assign clock between 40-50Mhz
 wire   [1:0] joy_type_raw    = status[127:126]; // 0=Off, 1=Saturn, 2=DB9MD, 3=DB15
 wire         snac_active     = |status[63:62];  // SNAC preempts joydb on shared USER_IO
+// MT32-pi probe-suppression gate. Auto-detected from MT32 signals declared
+// elsewhere in this file (mt32_disable / mt32_use / mt32_on_primary). Hand-edit
+// if the heuristic missed your core's gate expression. Suppresses the OSD-open
+// autodetect probe so it doesn't read the RPi's I2C master traffic as a ghost
+// Saturn signature. See the fork hazard notes.
+wire         mt32_primary_active = 1'b0;
 wire   [1:0] joy_type        = snac_active ? 2'd0 : joy_type_raw;
 wire         joy_2p          = status[125];
 wire         snac_p1         = (status[63:62] == 2'd1);
@@ -209,6 +215,9 @@ wire  [15:0] joy_raw_payload;
 joydb joydb (
   .clk             ( CLK_JOY         ),
   .USER_IN         ( USER_IN         ),
+  .OSD_STATUS          ( OSD_STATUS          ),
+  .snac_active         ( snac_active         ),
+  .mt32_primary_active ( mt32_primary_active ),
   .joy_type        ( joy_type        ),
   .joy_2p          ( joy_2p          ),
   .saturn_unlocked ( saturn_unlocked ),
